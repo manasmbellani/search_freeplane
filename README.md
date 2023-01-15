@@ -10,6 +10,8 @@ Script has been tested on mindmap files of type `standard-1.6.mm` generated from
 
 Files that are searched by default should have `.mm` extension which is used by default by Freeplane.
 
+To expand the list of extensions, provide a comma-separated list of extensions e.g. `.mmap,.mm,.mind` to the `-e` argument when executing the script.
+
 ## Setup
 
 ### Via docker
