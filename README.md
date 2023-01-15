@@ -39,17 +39,24 @@ search_maps() {
 # Now search for `.*hello` regex in folder `/opt/my-maps`
 search_maps ".*hello.*"
 ```
-
-To view the content from the beginning with colour, sometimes it could be better to consider using `less -R` and `unbuffer` from the expect package (which helps see the colour via `less`) as explained [here](https://superuser.com/questions/117841/when-reading-a-file-with-less-or-more-how-can-i-get-the-content-in-colors)
+Altrenatively, one can also use virtualenv and build simpler command for searching specific folder e.g. `/opt/my-maps` for keyword:
 ```
 # If expect is not installed (for eg via brew in macbook)
 brew install expect
 
 search_maps() {
+    cwd=$(pwd)
+    cd /opt/search_freeplane
+    source venv/bin/activate
     unbuffer python3 main.py -f /opt/my-maps -k "$1" \
         | less -R
+    deactivate
+    cd "$cwd"
 }
 ```
+
+To view the content from the beginning with colour, sometimes it could be better to consider using `less -R` and `unbuffer` from the expect package (which helps see the colour via `less`) as explained [here](https://superuser.com/questions/117841/when-reading-a-file-with-less-or-more-how-can-i-get-the-content-in-colors)
+
 
 ## Usage
 
