@@ -40,7 +40,7 @@ search_maps ".*hello.*"
 
 ## Usage
 
-To search for the keyword `pcageneral` in all mindmap files (`.mm`) in folder `~/my-maps`, execute the following command:
+To search for a single keyword `pcageneral` in all mindmap files (`.mm`) in folder `~/my-maps`, execute the following command:
 ```
 python3 main.py -k pcageneral -f ~/my-maps
 ```
@@ -55,7 +55,16 @@ To display matches ignoring the newlines in the output and search for regex `.*h
 python3 main.py -k `hello.*world`  -f ~/my-maps -rn
 ```
 
-To run the same command above from docker container
+To search for multiple keywords all of which should be present, separate keywords by spaces by default. For example, the following command will ensure that 4 words are found in node and sub-children:
+```
+python3 main.py -k "hello main world pingback" -f ~/my-maps
+```
+
+To search for one or more phrase which contains spaces eg `pingback is`, use `-d` with `,` as follows:
+```
+python3 main.py -f /opt/my-maps -k "hello,main,world,pingback is" -d ","
+```
+To run the command above from inside docker container
 ```
 docker run --rm -v /opt/my-maps:/opt/my-maps -it -e "TERM=xterm-256color" --rm search_freeplane -k "pcageneral" -rn
 ```

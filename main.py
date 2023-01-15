@@ -124,14 +124,15 @@ def flatten_freeplane_node(map_structure, prev_text, node):
     if num_children_processed == 0:
         map_structure.append(prev_text)
 
-def search_freeplane_map(filepath, map_structure, keyword, replace_newlines, 
+def search_freeplane_map(filepath, map_structure, keywords, delimiter, replace_newlines, 
     case_sensitive=False):
     """Search the Freeplane map
 
     Args:
         filepath (str): File path to search maps used for printing  
         map_structure (dict): Structure of map
-        keyword (str): Regex string to search for in the map
+        keywords (str): Regex string to search for in the map
+        delimiter (str): Delimiter to use form multiple keywords
         replace_newlines (bool): Replace new lines
         case_sensitive (bool, optional): Whether the search should be case-sensitive or not. Defaults, False
 
@@ -140,24 +141,43 @@ def search_freeplane_map(filepath, map_structure, keyword, replace_newlines,
     """
     lines_found = []
 
-    debug(f"Searching freeplane map: {filepath} for keyword: {keyword}...")
-    for l in map_structure:
-        if case_sensitive:
-            ms = re.search(keyword, l)
-        else:
-            ms = re.search(keyword, l, re.I)
-        if ms:
-            if case_sensitive:
-                colored_text = re.sub(keyword, lambda m: colored(m.group(), MATCH_COLOR) , l)
-            else:
-                colored_text = re.sub(keyword, lambda m: colored(m.group(), MATCH_COLOR) , l, flags=re.I)
-            
-            # Replace the new lines with characters to replace new lines
-            if replace_newlines:
-                colored_text = colored_text.replace("\n", LINEBREAK)
-                colored_text = colored_text.replace("\r", LINEBREAK)
+    # Get the list of keywords to search for
+    keywords_arr = keywords.split(delimiter)
 
-            lines_found.append(colored_text)
+    debug(f"Searching freeplane map: {filepath} for keywords: {keywords}...")
+    for l in map_structure:
+
+        # Assume keywords match has been found
+        kw_match_found = True
+
+        # Search for keywords and ensure that they are found
+        line_to_search = l
+        for kw in keywords_arr:
+    
+            if case_sensitive:
+                ms = re.search(kw, line_to_search)
+            else:
+                ms = re.search(kw, line_to_search, re.I)
+            if ms:
+
+                # Simply, color the keywords discovered in the line
+                if case_sensitive:
+                    line_to_search = re.sub(kw, lambda m: colored(m.group(), MATCH_COLOR) , line_to_search)
+                else:
+                    line_to_search = re.sub(kw, lambda m: colored(m.group(), MATCH_COLOR) , line_to_search, flags=re.I)
+                
+                # Replace the new lines with characters to replace new lines
+                if replace_newlines:
+                    line_to_search = line_to_search.replace("\n", LINEBREAK)
+                    line_to_search = line_to_search.replace("\r", LINEBREAK)
+            else:
+                # Match wasn't found in line, stop searching
+                kw_match_found = False
+                break
+
+        # If keywords found, then append
+        if kw_match_found:
+            lines_found.append(line_to_search)
 
     return lines_found
 
@@ -237,11 +257,12 @@ def put_search_tasks(filepath):
     global search_tasks_queue
     search_tasks_queue.put(filepath)
 
-def open_map_and_search(keyword, case_sensitive, replace_newlines, block_period=INIT_BLOCK_PERIOD):
+def open_map_and_search(keywords, delimiter, case_sensitive, replace_newlines, block_period=INIT_BLOCK_PERIOD):
     """Open a single map from the queue  and search
 
     Args:
-        keyword (str): Keyword to search for in the map file
+        keywords (str): Keywords to search for in the map file
+        delimiter (str): Delimiter to use for multiple keywords
         case_sensitive (bool): Case sensitive
         replace_newlines (str): Newlines for replacement
     """
@@ -269,8 +290,8 @@ def open_map_and_search(keyword, case_sensitive, replace_newlines, block_period=
             # Search the freeplane map for the keywords
             did_user_interrupt = user_interrupt_flag.is_set()
             if not did_user_interrupt:
-                lines_found = search_freeplane_map(filepath, map_structure, keyword, replace_newlines,
-                    case_sensitive)
+                lines_found = search_freeplane_map(filepath, map_structure, keywords, delimiter, 
+                    replace_newlines, case_sensitive)
             else:
                 continue_thread = False
 
@@ -309,14 +330,15 @@ def list_files_to_check(file_folder, extensions):
 
     return files_to_search
 
-def launch_all_threads(file_folder, keyword, case_sensitive, extensions, num_threads,
+def launch_all_threads(file_folder, keywords, delimiter, case_sensitive, extensions, num_threads,
     replace_newlines):
     """
     Launch all the threads that will perform the search across the various Freeplane Map files
 
     Args:
         file_folder (str): Path to file/folder 
-        keyword (str): Regex keyword to search
+        keywords (str): Regex keywords to search
+        delimiter (str): Delimiter to use for multiple keywords
         case_sensitive (bool): Case sensitive
         extensions (str): List of freeplane file extensions
         num_threads (int): Number of threads for search tasks
@@ -329,7 +351,7 @@ def launch_all_threads(file_folder, keyword, case_sensitive, extensions, num_thr
 
     # Launch the threads to open map and search
     for _ in range(0, num_threads):
-        t = threading.Thread(target=open_map_and_search, args=(keyword, case_sensitive,
+        t = threading.Thread(target=open_map_and_search, args=(keywords, delimiter, case_sensitive,
             replace_newlines))
         t.start()   
         thread_objects.append(t)
@@ -351,7 +373,11 @@ def launch_all_threads(file_folder, keyword, case_sensitive, extensions, num_thr
 
 def main():
     parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=CustomFormatter)
-    parser.add_argument("-k", "--keyword", required=True, help="Keyword search (regex) in the Freeplane files")
+    parser.add_argument("-k", "--keywords", required=True, 
+        help=("One or multiple Keyword search (or regex) in Freeplane files. "
+              "Repeat this argument to supply multiple values"))
+    parser.add_argument("-d", "--delimiter", default=" ", 
+        help="Delimiter to use for multiple keywords")
     parser.add_argument("-f", "--file-folder", default="/opt/my-maps", help="File/folder to search")
     parser.add_argument("-c", "--case-sensitive", action="store_true", 
         help="Keyword search (regex) in the Freeplane files")
@@ -374,7 +400,7 @@ def main():
     
     init_search_tasks_queue()
 
-    launch_all_threads(args.file_folder, args.keyword, args.case_sensitive, args.extensions, int(args.num_threads),
+    launch_all_threads(args.file_folder, args.keywords, args.delimiter, args.case_sensitive, args.extensions, int(args.num_threads),
         args.replace_newlines)
 
 if __name__ == "__main__":
