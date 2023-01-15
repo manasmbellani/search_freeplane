@@ -25,7 +25,7 @@ python3 -m pip install -r requirements.txt
 deactivate
 ```
 
-### Setup 
+### Alias Setup 
 
 Once installed via either methods above, it is easier to setup an alias in the `~/.bashrc` OR `~/.bash_profile` to quickly run searches in common locations e.g. as shown below
 ```
@@ -36,6 +36,17 @@ search_maps() {
 
 # Now search for `.*hello` regex in folder `/opt/my-maps`
 search_maps ".*hello.*"
+```
+
+To view the content from the beginning with colour, sometimes it could be better to consider using `less -R` and `unbuffer` from the expect package (which helps see the colour via `less`) as explained [here](https://superuser.com/questions/117841/when-reading-a-file-with-less-or-more-how-can-i-get-the-content-in-colors)
+```
+# If expect is not installed (for eg via brew in macbook)
+brew install expect
+
+search_maps() {
+    unbuffer python3 main.py -f /opt/my-maps -k "$1" \
+        | less -R
+}
 ```
 
 ## Usage
