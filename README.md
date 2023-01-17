@@ -90,7 +90,7 @@ To run the command above from inside docker container
 docker run --rm -v /opt/my-maps:/opt/my-maps -it -e "TERM=xterm-256color" --rm search_freeplane -k "pcageneral" -rn
 ```
 
-To validate the freeplane mindmap only, use the `-va` argument which will use `xml.etree.ElementTree` class to parse the mindmap and display any syntax errors in the mindmap instead of lxml which uses best effort to parse the mindmap and return results:
+To validate the freeplane mindmaps only, use the `-va` argument which will use `xml.etree.ElementTree` class to parse the mindmap and display any syntax errors in the mindmap instead of lxml which uses best effort to parse the mindmap and return results. The following command will validate the freeplane mindmaps in the folder `~/my-maps` (keyword is provided for completeness and is ignored)
 ```
-python3 main.py -k test2 -f ~/my-maps/z-testmap.mm -v
+python3 main.py -k test2 -f ~/my-maps/ -va
 ```
