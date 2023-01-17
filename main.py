@@ -6,6 +6,7 @@ import queue
 import threading
 import sys
 import lxml.etree as et
+import xml.etree.ElementTree as xet
 
 from queue import Queue
 from termcolor import colored, cprint
@@ -74,11 +75,12 @@ def debug(msg):
     if verbose_flag:
         print("[*] " + msg)
 
-def open_freeplane_map(map_file):
+def open_freeplane_map(map_file, validate_only=False):
     """Open the Freeplane XML map and parse the Freeplane map recursively
 
     Args:
         map_file (str): Freeplane XML Mindmap file to parse
+        validate_only (bool, optional): Whether to validate Freeplane Map. Defaults, False.
 
     Returns:
         list: Structure of the Mindmap one-per-line
@@ -88,20 +90,26 @@ def open_freeplane_map(map_file):
         error(f"File: {map_file} not found")
     else:
         try:
-            parser = et.XMLParser(recover=True)
-            tree = et.parse(map_file, parser=parser)
+            if validate_only:
+                # Validating the mindmap only
+                tree = xet.parse(map_file)
+            else:
 
-            map_structure = []
-            
-            # Parse the root ('map' tag)
-            root = tree.getroot()
+                # Parse the freeplane mindmap with lxml for limited errors
+                # and parsing
+                parser = et.XMLParser(recover=True)
+                tree = et.parse(map_file, parser=parser)
+                
+                # Parse the root ('map' tag)
+                root = tree.getroot()
 
-            # Parse each node
-            for c in root:
-                if c.tag == 'node': 
-                    flatten_freeplane_node(map_structure, '', c)
+                # Parse each node
+                for c in root:
+                    if c.tag == 'node': 
+                        flatten_freeplane_node(map_structure, '', c)
         except Exception as e:
             error(f"Exception parsing freeplane map: {map_file}. Error: {e.__class__}, {e}")
+
     return map_structure
 
 def flatten_freeplane_node(map_structure, prev_text, node):
@@ -257,14 +265,17 @@ def put_search_tasks(filepath):
     global search_tasks_queue
     search_tasks_queue.put(filepath)
 
-def open_map_and_search(keywords, delimiter, case_sensitive, replace_newlines, block_period=INIT_BLOCK_PERIOD):
-    """Open a single map from the queue  and search
+def open_map_and_search(keywords, delimiter, case_sensitive, replace_newlines, 
+    validate_only=False, block_period=INIT_BLOCK_PERIOD):
+    """Open a single map from the queue and search
 
     Args:
         keywords (str): Keywords to search for in the map file
         delimiter (str): Delimiter to use for multiple keywords
         case_sensitive (bool): Case sensitive
         replace_newlines (str): Newlines for replacement
+        validate_only (bool): Whether to only validate the freeplane map instead of continuing to 
+            parse to show any errors. Defaults, False. 
     """
     global user_interrupt_flag, search_tasks_queue
 
@@ -283,24 +294,26 @@ def open_map_and_search(keywords, delimiter, case_sensitive, replace_newlines, b
             # Open the freeplane map
             did_user_interrupt = user_interrupt_flag.is_set()
             if not did_user_interrupt:
-                map_structure = open_freeplane_map(filepath)
+                map_structure = open_freeplane_map(filepath, validate_only)
             else:
                 continue_thread = False
 
-            # Search the freeplane map for the keywords
-            did_user_interrupt = user_interrupt_flag.is_set()
-            if not did_user_interrupt:
-                lines_found = search_freeplane_map(filepath, map_structure, keywords, delimiter, 
-                    replace_newlines, case_sensitive)
-            else:
-                continue_thread = False
+            # if validating freeplane mindmaps only, then we don't search for keywords...
+            if not validate_only:
+                # Search the freeplane map for the keywords
+                did_user_interrupt = user_interrupt_flag.is_set()
+                if not did_user_interrupt:
+                    lines_found = search_freeplane_map(filepath, map_structure, keywords, delimiter, 
+                        replace_newlines, case_sensitive)
+                else:
+                    continue_thread = False
 
-            # Put the lines found from print queue for printing to terminal
-            did_user_interrupt = user_interrupt_flag.is_set()
-            if not did_user_interrupt:
-                put_on_print_queue(filepath, lines_found)
-            else:
-                continue_thread = False
+                # Put the lines found from print queue for printing to terminal
+                did_user_interrupt = user_interrupt_flag.is_set()
+                if not did_user_interrupt:
+                    put_on_print_queue(filepath, lines_found)
+                else:
+                    continue_thread = False
         else:
             continue_thread = False
 
@@ -331,7 +344,7 @@ def list_files_to_check(file_folder, extensions):
     return files_to_search
 
 def launch_all_threads(file_folder, keywords, delimiter, case_sensitive, extensions, num_threads,
-    replace_newlines):
+    replace_newlines, validate_only=False):
     """
     Launch all the threads that will perform the search across the various Freeplane Map files
 
@@ -343,6 +356,7 @@ def launch_all_threads(file_folder, keywords, delimiter, case_sensitive, extensi
         extensions (str): List of freeplane file extensions
         num_threads (int): Number of threads for search tasks
         replace_new_lines (bool): Replace new lines
+        validate_only (bool, optional): Validate mindmap only. Defaults, False.
     """
 
     files_to_search = list_files_to_check(file_folder, extensions)
@@ -352,7 +366,7 @@ def launch_all_threads(file_folder, keywords, delimiter, case_sensitive, extensi
     # Launch the threads to open map and search
     for _ in range(0, num_threads):
         t = threading.Thread(target=open_map_and_search, args=(keywords, delimiter, case_sensitive,
-            replace_newlines))
+            replace_newlines, validate_only))
         t.start()   
         thread_objects.append(t)
 
@@ -389,6 +403,8 @@ def main():
         help="Verbose to print messages")
     parser.add_argument("-rn", "--replace-newlines", action="store_true", 
         help="Replace new lines with '\\n' to allow printing of matches per line")
+    parser.add_argument("-va", "--validate", action="store_true", 
+        help="Validate the mindmaps only")
 
     args = parser.parse_args()
 
@@ -400,8 +416,8 @@ def main():
     
     init_search_tasks_queue()
 
-    launch_all_threads(args.file_folder, args.keywords, args.delimiter, args.case_sensitive, args.extensions, int(args.num_threads),
-        args.replace_newlines)
+    launch_all_threads(args.file_folder, args.keywords, args.delimiter, args.case_sensitive, 
+        args.extensions, int(args.num_threads), args.replace_newlines, args.validate)
 
 if __name__ == "__main__":
     sys.exit(main())
