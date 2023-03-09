@@ -75,6 +75,17 @@ def debug(msg):
     if verbose_flag:
         print("[*] " + msg)
 
+def warning(msg):
+    """Print warning message
+
+    Args:
+        msg (msg): Error message
+    """
+    global verbose_flag
+
+    if verbose_flag:
+        print("[!] " + msg)
+
 def open_freeplane_map(map_file, validate_only=False):
     """Open the Freeplane XML map and parse the Freeplane map recursively
 
@@ -106,13 +117,13 @@ def open_freeplane_map(map_file, validate_only=False):
                 # Parse each node
                 for c in root:
                     if c.tag == 'node': 
-                        flatten_freeplane_node(map_structure, '', c)
+                        flatten_freeplane_node(map_file, map_structure, '', c)
         except Exception as e:
             error(f"Exception parsing freeplane map: {map_file}. Error: {e.__class__}, {e}")
 
     return map_structure
 
-def flatten_freeplane_node(map_structure, prev_text, node):
+def flatten_freeplane_node(map_file, map_structure, prev_text, node):
     """Parse Freeplane child nodes recursively
 
     Args:
@@ -121,11 +132,30 @@ def flatten_freeplane_node(map_structure, prev_text, node):
         node (xml.etree.ElementTree): XML element to recursively parse and flatten
     """
     num_children_processed = 0
+    
+    # Regex filter for cleaning the HTML tags in richcontent 
+    clean_http_tags = None
+
+    # Get the current node's text
     current_node_text = node.attrib.get('TEXT', '')
+    # Look for richcontent if node text not available
+    if not current_node_text:
+        # look at the children of the node (can we see any rich content)
+        for c in node.getchildren():
+            if c.tag == 'richcontent':
+                if not clean_http_tags:
+                    clean_http_tags = re.compile('<.*?>') 
+
+                # Parse the internal text
+                current_node_text += re.sub(clean_http_tags, '', et.tostring(c).decode()).strip()
+            else:
+                warning(f"Observed unknown child of type: {c.tag} for current_node in map file: {map_file}")
+    
     prev_text += NODE_CONNECTOR + current_node_text
+    
     for c in node:
         if c.tag == 'node':
-            flatten_freeplane_node(map_structure, prev_text, c)
+            flatten_freeplane_node(map_file, map_structure, prev_text, c)
             num_children_processed += 1
 
     # If we reach the end of the chain, that is one single flow
